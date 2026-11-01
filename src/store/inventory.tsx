@@ -16,6 +16,7 @@ export type NewProduct = {
 type InventoryContextValue = {
   products: Product[];
   addProduct: (product: NewProduct) => Promise<void>;
+  updateProduct: (id: string, product: NewProduct) => Promise<void>;
   removeProduct: (id: string) => Promise<void>;
   categoryCounts: Record<string, number>;
   fetchProducts: () => Promise<void>;
@@ -81,6 +82,31 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  // 4. Implement updateProduct to send PUT requests to MongoDB
+  const updateProduct = useCallback(async (id: string, product: NewProduct) => {
+    if (!user?.email) return;
+
+    try {
+      const payload = {
+        ...product,
+        userEmail: user.email,
+      };
+
+      const res = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error('Failed to update product');
+
+      const updatedSavedProduct = await res.json();
+      setProducts((prev) => prev.map((p) => (p.id === id ? updatedSavedProduct : p)));
+    } catch (error) {
+      console.error('Error updating product in MongoDB:', error);
+    }
+  }, [user]);
+
   const removeProduct = useCallback(async (id: string) => {
     try {
       await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
@@ -99,9 +125,10 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     return counts;
   }, [products]);
 
+  // Add updateProduct to the exported values
   const value = useMemo(
-    () => ({ products, addProduct, removeProduct, categoryCounts, fetchProducts }),
-    [products, addProduct, removeProduct, categoryCounts, fetchProducts],
+    () => ({ products, addProduct, updateProduct, removeProduct, categoryCounts, fetchProducts }),
+    [products, addProduct, updateProduct, removeProduct, categoryCounts, fetchProducts],
   );
 
   return <InventoryContext.Provider value={value}>{children}</InventoryContext.Provider>;

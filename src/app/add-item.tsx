@@ -3,7 +3,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, TextInput } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryPicker } from '@/components/add-item/CategoryPicker';
@@ -12,6 +12,8 @@ import { FormField } from '@/components/ui/FormField';
 import { categoryEmoji } from '@/data/mockData';
 import { useInventory } from '@/store/inventory';
 import { colors, gradients } from '@/theme/colors';
+
+const UNITS = ['pkts', 'pcs', 'g', 'kg', 'ml', 'L'];
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
@@ -22,7 +24,8 @@ export default function AddItemScreen() {
   const { addProduct } = useInventory();
 
   const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [amount, setAmount] = useState('');
+  const [unit, setUnit] = useState('pkts');
   const [categoryId, setCategoryId] = useState('dairy');
   const [expiryDate, setExpiryDate] = useState(() => {
     const d = new Date();
@@ -31,7 +34,7 @@ export default function AddItemScreen() {
   });
   const [showPicker, setShowPicker] = useState(false);
 
-  const canSave = name.trim().length > 0 && quantity.trim().length > 0;
+  const canSave = name.trim().length > 0 && amount.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
@@ -39,7 +42,7 @@ export default function AddItemScreen() {
       name: name.trim(),
       categoryId,
       emoji: categoryEmoji[categoryId] ?? '🍽️',
-      quantity: quantity.trim(),
+      quantity: `${amount.trim()} ${unit}`, // Combine them here!
       expiryDate: expiryDate.toISOString(),
     });
     router.back();
@@ -96,13 +99,53 @@ export default function AddItemScreen() {
                     returnKeyType="next"
                   />
 
-                  <FormField
-                    label="Quantity"
-                    placeholder="e.g. 500 g"
-                    value={quantity}
-                    onChangeText={setQuantity}
-                    returnKeyType="done"
-                  />
+                  {/* --- NEW AMOUNT & UNIT PICKER ROW --- */}
+                  <View className="gap-2">
+                    <Text className="text-ink-300 text-xs font-semibold uppercase ml-1">Quantity & Unit</Text>
+                    <View className="flex-row gap-3">
+                      <View className="flex-1">
+                        <GlassCard radius={16}>
+                          <TextInput
+                            value={amount}
+                            onChangeText={setAmount}
+                            placeholder="e.g. 2"
+                            placeholderTextColor={colors.text.tertiary}
+                            keyboardType="decimal-pad"
+                            className="text-white text-[15px] px-4 py-3.5"
+                          />
+                        </GlassCard>
+                      </View>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        className="flex-[1.5]"
+                        contentContainerStyle={{ gap: 8 }}
+                      >
+                        {UNITS.map((u) => (
+                          <Pressable key={u} onPress={() => setUnit(u)}>
+                            <GlassCard
+                              radius={16}
+                              style={{
+                                backgroundColor: unit === u ? `${colors.mint[400]}25` : 'transparent',
+                                borderColor: unit === u ? colors.mint[400] : 'rgba(255,255,255,0.1)',
+                                borderWidth: 1,
+                              }}
+                            >
+                              <View className="px-4 py-3.5 justify-center">
+                                <Text style={{
+                                  color: unit === u ? colors.mint[400] : colors.text.secondary,
+                                  fontWeight: unit === u ? '600' : '400'
+                                }}>
+                                  {u}
+                                </Text>
+                              </View>
+                            </GlassCard>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </View>
+                  {/* --- END NEW PICKER --- */}
 
                   <View className="gap-2">
                     <Text className="text-ink-300 text-xs font-semibold uppercase ml-1">Category</Text>
@@ -140,13 +183,7 @@ export default function AddItemScreen() {
                   colors={gradients.brand}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={{
-                    height: 52,
-                    borderRadius: 26,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: 18,
-                  }}
+                  style={{ height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginTop: 18 }}
                 >
                   <Text className="text-base font-bold" style={{ color: '#04120E' }}>
                     Add to Kitchen

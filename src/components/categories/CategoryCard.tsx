@@ -1,11 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { GlassCard } from '@/components/ui/GlassCard';
 import type { Category } from '@/data/mockData';
 
 export function CategoryCard({ category, count }: { category: Category; count: number }) {
+  const router = useRouter();
+
   return (
-    <Pressable className="w-1/2 p-1.5">
+    <Pressable
+      className="w-1/2 p-1.5"
+      onPress={() => router.push({ pathname: '/category-details', params: { id: category.id } })}
+    >
       {({ pressed }) => (
         <GlassCard
           radius={24}
@@ -16,7 +22,7 @@ export function CategoryCard({ category, count }: { category: Category; count: n
               style={{ backgroundColor: `${category.color}22` }}
               className="h-12 w-12 rounded-2xl items-center justify-center"
             >
-              <Ionicons name={category.icon} size={22} color={category.color} />
+              <Ionicons name={category.icon as any} size={22} color={category.color} />
             </View>
             <View className="gap-0.5">
               <Text className="text-white text-[15px] font-semibold">{category.name}</Text>

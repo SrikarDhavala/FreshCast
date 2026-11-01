@@ -1,13 +1,16 @@
 import { Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { categories, type Product } from '@/data/mockData';
 
 export function ExpiryItemCard({ product }: { product: Product }) {
   const category = categories.find((c) => c.id === product.categoryId);
+  const router = useRouter(); // 1. Initialize the router
 
   return (
-    <Pressable>
+    // 2. Add the onPress handler to route to the dynamic details page
+    <Pressable onPress={() => router.push({ pathname: '/item-details', params: { id: product.id } })}>
       {({ pressed }) => (
         <GlassCard
           radius={22}

@@ -30,6 +30,9 @@ function RootLayoutNav() {
         <Stack.Screen name="login" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="add-item" options={{ presentation: 'transparentModal' }} />
+        <Stack.Screen name="item-details" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="edit-item" options={{ presentation: 'transparentModal' }} />
+        <Stack.Screen name="category-details" options={{ presentation: 'modal' }} />
       </Stack>
     </InventoryProvider>
   );

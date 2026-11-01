@@ -96,6 +96,25 @@ def delete_item(item_id: str):
     
     return {"message": "Item deleted successfully"}
 
+# --- NEW EDIT ROUTE ---
+@app.put("/api/inventory/{item_id}")
+def update_item(item_id: str, item: InventoryItemSchema):
+    if not ObjectId.is_valid(item_id):
+        raise HTTPException(status_code=400, detail="Invalid MongoDB ID format")
+    
+    update_data = item.model_dump() if hasattr(item, 'model_dump') else item.dict()
+    
+    result = inventory_collection.update_one(
+        {"_id": ObjectId(item_id)},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found in database")
+        
+    updated_item = inventory_collection.find_one({"_id": ObjectId(item_id)})
+    return item_helper(updated_item)
+
 @app.post("/api/auth/signup")
 def signup(user: UserSignupSchema):
     # Check if the email is already in the database
@@ -108,7 +127,7 @@ def signup(user: UserSignupSchema):
         "email": user.email,
         "password": user.password, # Note: In a real app, you would hash this password!
         "householdSize": 1, # Default size for a new user
-        "memberSince": datetime.now().strftime("%B %Y") # Formats as "October 2026"
+        "memberSince": datetime.now().strftime("%B %Y")
     }
     
     users_collection.insert_one(new_user)
