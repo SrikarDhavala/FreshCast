@@ -22,14 +22,14 @@ function formatDate(date: Date): string {
 export default function EditItemScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const insets = useSafeAreaInsets();
-    const { products, updateProduct } = useInventory();
+    const { products, updateProduct, categories, findCategory } = useInventory();
 
     const existingItem = products.find((p) => p.id === id);
 
     const [name, setName] = useState('');
     const [amount, setAmount] = useState('');
     const [unit, setUnit] = useState('pkts');
-    const [categoryId, setCategoryId] = useState('dairy');
+    const [categoryId, setCategoryId] = useState(categories[0]?.id ?? 'dairy');
     const [expiryDate, setExpiryDate] = useState(new Date());
     const [showPicker, setShowPicker] = useState(false);
 
@@ -57,11 +57,12 @@ export default function EditItemScreen() {
     const canSave = name.trim().length > 0 && amount.trim().length > 0;
 
     const handleSave = () => {
+        const selectedCategory = findCategory(categoryId);
         if (!canSave || !existingItem) return;
         updateProduct(existingItem.id, {
             name: name.trim(),
             categoryId,
-            emoji: categoryEmoji[categoryId] ?? '🍽️',
+            emoji: selectedCategory?.emoji ?? '🍽️',
             quantity: `${amount.trim()} ${unit}`,
             expiryDate: expiryDate.toISOString(),
         });

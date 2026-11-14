@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Alert } from 'react-native';
 
 // Update this to your local Wi-Fi IP address!
-const AUTH_API_URL = 'http://192.168.1.3:8000/api/auth';
+const AUTH_API_URL = 'http://192.168.1.11:8000/api/auth';
 
 type User = {
     id: string;

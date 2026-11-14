@@ -2,14 +2,15 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { categories, type Product } from '@/data/mockData';
+import type { Product } from '@/data/mockData';
+import { useInventory } from '@/store/inventory';
 
 export function ExpiryItemCard({ product }: { product: Product }) {
-  const category = categories.find((c) => c.id === product.categoryId);
-  const router = useRouter(); // 1. Initialize the router
+  const { findCategory } = useInventory();
+  const category = findCategory(product.categoryId);
+  const router = useRouter();
 
   return (
-    // 2. Add the onPress handler to route to the dynamic details page
     <Pressable onPress={() => router.push({ pathname: '/item-details', params: { id: product.id } })}>
       {({ pressed }) => (
         <GlassCard
@@ -26,7 +27,7 @@ export function ExpiryItemCard({ product }: { product: Product }) {
             <View className="flex-1 gap-1">
               <Text className="text-white text-[15px] font-semibold">{product.name}</Text>
               <Text className="text-ink-300 text-xs">
-                {category?.name} · {product.quantity}
+                {category?.name ?? 'Uncategorized'} · {product.quantity}
               </Text>
             </View>
             <View className="items-end gap-1.5">

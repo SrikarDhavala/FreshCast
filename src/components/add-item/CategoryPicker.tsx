@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { categories } from '@/data/mockData';
+import { useInventory } from '@/store/inventory';
 import { colors } from '@/theme/colors';
 
 type CategoryPickerProps = {
@@ -9,11 +9,13 @@ type CategoryPickerProps = {
 };
 
 export function CategoryPicker({ value, onChange }: CategoryPickerProps) {
+  const { categories } = useInventory();
+
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-1">
       <View className="flex-row gap-2 px-1">
         {categories.map((category) => {
-          const selected = category.id === value;
+          const selected = category.id === value || category.slug === value;
           return (
             <Pressable
               key={category.id}

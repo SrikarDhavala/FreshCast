@@ -21,12 +21,12 @@ function formatDate(date: Date): string {
 
 export default function AddItemScreen() {
   const insets = useSafeAreaInsets();
-  const { addProduct } = useInventory();
+  const { addProduct, categories, findCategory } = useInventory();
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [unit, setUnit] = useState('pkts');
-  const [categoryId, setCategoryId] = useState('dairy');
+  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? 'dairy');
   const [expiryDate, setExpiryDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
@@ -37,11 +37,12 @@ export default function AddItemScreen() {
   const canSave = name.trim().length > 0 && amount.trim().length > 0;
 
   const handleSave = () => {
+    const selectedCategory = findCategory(categoryId);
     if (!canSave) return;
     addProduct({
       name: name.trim(),
       categoryId,
-      emoji: categoryEmoji[categoryId] ?? '🍽️',
+      emoji: selectedCategory?.emoji ?? '🍽️',
       quantity: `${amount.trim()} ${unit}`, // Combine them here!
       expiryDate: expiryDate.toISOString(),
     });

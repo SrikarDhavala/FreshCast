@@ -6,17 +6,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { ExpiryItemCard } from '@/components/home/ExpiryItemCard';
 import { useInventory } from '@/store/inventory';
-import { categories } from '@/data/mockData';
 
 export default function CategoryDetailsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { products } = useInventory();
+    const { products, findCategory } = useInventory();
 
-    // Find the selected category and its items
-    const category = categories.find((c) => c.id === id);
-    const categoryItems = products.filter((p) => p.categoryId === id);
+    // Find the selected category and match both MongoDB IDs and legacy slugs
+    const category = findCategory(id);
+    const categoryItems = products.filter((p) => {
+        const matched = findCategory(p.categoryId);
+        return matched?.id === category?.id || p.categoryId === id;
+    });
 
     if (!category) return null;
 

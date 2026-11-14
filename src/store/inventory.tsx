@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
-import { categories as categoryList, type Product } from '@/data/mockData';
-import { useAuth } from '@/context/AuthContext'; // Import Auth to get the current user
+import { categories as defaultCategories, categoryEmoji, type Category, type Product } from '@/data/mockData';
+import { useAuth } from '@/context/AuthContext';
 
-// Update this to your local IP address
-const API_URL = 'http://192.168.1.3:8000/api/inventory';
+// Update this to your local IP address (without /api/inventory at the end)
+const BASE_URL = 'http://192.168.1.11:8000';
+const INVENTORY_URL = `${BASE_URL}/api/inventory`;
+const CATEGORIES_URL = `${BASE_URL}/api/categories`;
 
 export type NewProduct = {
   name: string;
@@ -13,11 +15,23 @@ export type NewProduct = {
   expiryDate: string;
 };
 
+export type NewCategory = {
+  name: string;
+  icon: Category['icon'];
+  color: string;
+  emoji: string;
+};
+
 type InventoryContextValue = {
   products: Product[];
+  categories: Category[];
   addProduct: (product: NewProduct) => Promise<void>;
   updateProduct: (id: string, product: NewProduct) => Promise<void>;
   removeProduct: (id: string) => Promise<void>;
+  addCategory: (category: NewCategory) => Promise<void>;
+  updateCategory: (id: string, category: NewCategory) => Promise<void>;
+  removeCategory: (id: string) => Promise<void>;
+  findCategory: (categoryId?: string) => Category | undefined;
   categoryCounts: Record<string, number>;
   fetchProducts: () => Promise<void>;
 };
@@ -26,20 +40,17 @@ const InventoryContext = createContext<InventoryContextValue | null>(null);
 
 export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
-
-  // 1. Get the current user from your AuthContext
+  const [categories, setCategories] = useState<Category[]>(defaultCategories);
   const { user } = useAuth();
 
-  // 2. Fetch items ONLY for the logged-in user
   const fetchProducts = useCallback(async () => {
     if (!user?.email) {
-      setProducts([]); // Wipe inventory clean if no user is logged in
+      setProducts([]);
       return;
     }
 
     try {
-      // Append the userEmail as a query parameter
-      const res = await fetch(`${API_URL}?userEmail=${encodeURIComponent(user.email)}`);
+      const res = await fetch(`${INVENTORY_URL}?userEmail=${encodeURIComponent(user.email)}`);
       if (res.ok) {
         const data = await res.json();
         setProducts(data);
@@ -49,25 +60,36 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // Refetch automatically whenever the logged-in user changes
+  const fetchCategories = useCallback(async () => {
+    if (!user?.email) {
+      setCategories(defaultCategories);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${CATEGORIES_URL}?userEmail=${encodeURIComponent(user.email)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories from MongoDB:', error);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    fetchCategories();
+  }, [fetchProducts, fetchCategories]);
 
-  // 3. Include userEmail when adding a new item
   const addProduct = useCallback(async (product: NewProduct) => {
     if (!user?.email) return;
 
     try {
-      const payload = {
-        ...product,
-        userEmail: user.email, // Attach the user to the item
-      };
-
-      const res = await fetch(API_URL, {
+      const res = await fetch(INVENTORY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...product, userEmail: user.email }),
       });
 
       if (!res.ok) {
@@ -82,20 +104,14 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // 4. Implement updateProduct to send PUT requests to MongoDB
   const updateProduct = useCallback(async (id: string, product: NewProduct) => {
     if (!user?.email) return;
 
     try {
-      const payload = {
-        ...product,
-        userEmail: user.email,
-      };
-
-      const res = await fetch(`${API_URL}/${id}`, {
+      const res = await fetch(`${INVENTORY_URL}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...product, userEmail: user.email }),
       });
 
       if (!res.ok) throw new Error('Failed to update product');
@@ -109,26 +125,111 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
 
   const removeProduct = useCallback(async (id: string) => {
     try {
-      await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      await fetch(`${INVENTORY_URL}/${id}`, { method: 'DELETE' });
       setProducts((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
       console.error('Error deleting product from MongoDB:', error);
     }
   }, []);
 
+  const addCategory = useCallback(async (category: NewCategory) => {
+    if (!user?.email) return;
+
+    try {
+      const res = await fetch(CATEGORIES_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...category, userEmail: user.email }),
+      });
+
+      if (!res.ok) throw new Error('Failed to create category');
+
+      const created = await res.json();
+      setCategories((prev) => [...prev, created]);
+    } catch (error) {
+      console.error('Error creating category:', error);
+    }
+  }, [user]);
+
+  const updateCategory = useCallback(async (id: string, category: NewCategory) => {
+    if (!user?.email) return;
+
+    try {
+      const res = await fetch(`${CATEGORIES_URL}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...category, userEmail: user.email }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update category');
+
+      const updated = await res.json();
+      setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    } catch (error) {
+      console.error('Error updating category:', error);
+    }
+  }, [user]);
+
+  const removeCategory = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${CATEGORIES_URL}/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete category');
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+    } catch (error) {
+      console.error('Error deleting category:', error);
+    }
+  }, []);
+
+  // Matches by MongoDB ID first, falling back to legacy slug (e.g., 'dairy') for older items
+  const findCategory = useCallback(
+    (categoryId?: string) => {
+      if (!categoryId) return undefined;
+      return (
+        categories.find((c) => c.id === categoryId || c.slug === categoryId) ??
+        defaultCategories.find((c) => c.id === categoryId)
+      );
+    },
+    [categories],
+  );
+
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const category of categoryList) counts[category.id] = 0;
+    for (const category of categories) counts[category.id] = 0;
     for (const product of products) {
-      counts[product.categoryId] = (counts[product.categoryId] ?? 0) + 1;
+      const matched = findCategory(product.categoryId);
+      const key = matched ? matched.id : product.categoryId;
+      counts[key] = (counts[key] ?? 0) + 1;
     }
     return counts;
-  }, [products]);
+  }, [categories, products, findCategory]);
 
-  // Add updateProduct to the exported values
   const value = useMemo(
-    () => ({ products, addProduct, updateProduct, removeProduct, categoryCounts, fetchProducts }),
-    [products, addProduct, updateProduct, removeProduct, categoryCounts, fetchProducts],
+    () => ({
+      products,
+      categories,
+      addProduct,
+      updateProduct,
+      removeProduct,
+      addCategory,
+      updateCategory,
+      removeCategory,
+      findCategory,
+      categoryCounts,
+      fetchProducts,
+    }),
+    [
+      products,
+      categories,
+      addProduct,
+      updateProduct,
+      removeProduct,
+      addCategory,
+      updateCategory,
+      removeCategory,
+      findCategory,
+      categoryCounts,
+      fetchProducts,
+    ],
   );
 
   return <InventoryContext.Provider value={value}>{children}</InventoryContext.Provider>;
