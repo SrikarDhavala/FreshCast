@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
-import { categories as defaultCategories, categoryEmoji, type Category, type Product } from '@/data/mockData';
+import { categories as defaultCategories, type Category, type Product, type Recipe } from '@/data/mockData';
 import { useAuth } from '@/context/AuthContext';
 
 // Update this to your local IP address (without /api/inventory at the end)
 const BASE_URL = 'http://192.168.1.11:8000';
 const INVENTORY_URL = `${BASE_URL}/api/inventory`;
 const CATEGORIES_URL = `${BASE_URL}/api/categories`;
+const RECIPES_URL = `${BASE_URL}/api/recipes`;
 
 export type NewProduct = {
   name: string;
@@ -25,6 +26,8 @@ export type NewCategory = {
 type InventoryContextValue = {
   products: Product[];
   categories: Category[];
+  recipes: Recipe[];
+  isGeneratingRecipes: boolean;
   addProduct: (product: NewProduct) => Promise<void>;
   updateProduct: (id: string, product: NewProduct) => Promise<void>;
   removeProduct: (id: string) => Promise<void>;
@@ -34,6 +37,7 @@ type InventoryContextValue = {
   findCategory: (categoryId?: string) => Category | undefined;
   categoryCounts: Record<string, number>;
   fetchProducts: () => Promise<void>;
+  generateRecipes: () => Promise<void>;
 };
 
 const InventoryContext = createContext<InventoryContextValue | null>(null);
@@ -41,6 +45,8 @@ const InventoryContext = createContext<InventoryContextValue | null>(null);
 export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(defaultCategories);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [isGeneratingRecipes, setIsGeneratingRecipes] = useState(false);
   const { user } = useAuth();
 
   const fetchProducts = useCallback(async () => {
@@ -77,10 +83,51 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  const fetchRecipes = useCallback(async () => {
+    if (!user?.email) {
+      setRecipes([]);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${RECIPES_URL}?userEmail=${encodeURIComponent(user.email)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRecipes(data.recipes ?? []);
+      }
+    } catch (error) {
+      console.error('Error fetching cached recipes:', error);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [fetchProducts, fetchCategories]);
+    fetchRecipes();
+  }, [fetchProducts, fetchCategories, fetchRecipes]);
+
+  const generateRecipes = useCallback(async () => {
+    if (!user?.email || isGeneratingRecipes) return;
+
+    setIsGeneratingRecipes(true);
+    try {
+      const res = await fetch(`${RECIPES_URL}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: user.email }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to generate recipes');
+      }
+
+      const data = await res.json();
+      setRecipes(data.recipes ?? []);
+    } finally {
+      setIsGeneratingRecipes(false);
+    }
+  }, [user, isGeneratingRecipes]);
 
   const addProduct = useCallback(async (product: NewProduct) => {
     if (!user?.email) return;
@@ -207,6 +254,9 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     () => ({
       products,
       categories,
+      recipes,
+      isGeneratingRecipes,
+      generateRecipes,
       addProduct,
       updateProduct,
       removeProduct,
@@ -220,6 +270,9 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
     [
       products,
       categories,
+      recipes,
+      isGeneratingRecipes,
+      generateRecipes,
       addProduct,
       updateProduct,
       removeProduct,

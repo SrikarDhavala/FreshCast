@@ -81,3 +81,27 @@ export const CATEGORY_EMOJIS = [
   '🍎', '🧀', '🥚', '🍜', '🍪', '🍫', '☕', '🥜',
   '🍚', '🥗', '🐟', '🍯',
 ];
+
+export type RecipeInventoryIngredient = {
+  name: string;
+  quantity: string;
+  isExpiring?: boolean;
+};
+
+export type RecipeExtraIngredient = {
+  name: string;
+  quantity: string;
+};
+
+export type Recipe = {
+  id: string;
+  title: string;
+  emoji: string;
+  description: string;
+  prepTime: string;
+  servings: string;
+  expiringIngredientsUsed: string[];
+  inventoryIngredients: RecipeInventoryIngredient[];
+  extraIngredients: RecipeExtraIngredient[];
+  instructions: string[];
+};

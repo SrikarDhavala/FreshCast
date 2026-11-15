@@ -40,6 +40,7 @@ inventory_collection = db["inventory"]
 users_collection = db["users"]
 
 categories_collection = db["categories"]
+recipes_collection = db["recipes"]
 
 DEFAULT_CATEGORIES = [
     {"slug": "dairy", "name": "Dairy", "icon": "water", "color": "#6BFFB8", "emoji": "🥛"},
@@ -68,6 +69,9 @@ class CategorySchema(BaseModel):
     icon: str
     color: str
     emoji: str = "🍽️"
+    userEmail: str
+
+class RecipeGenerateSchema(BaseModel):
     userEmail: str
 
 def item_helper(item) -> dict:
@@ -275,3 +279,131 @@ def delete_category(category_id: str):
         raise HTTPException(status_code=404, detail="Category not found")
 
     return {"message": "Category deleted successfully"}
+
+@app.get("/api/recipes")
+def get_cached_recipes(userEmail: str):
+    doc = recipes_collection.find_one({"userEmail": userEmail})
+    if not doc:
+        return {"recipes": [], "updatedAt": None}
+    return {
+        "recipes": doc.get("recipes", []),
+        "updatedAt": doc.get("updatedAt"),
+    }
+
+@app.post("/api/recipes/generate")
+def generate_recipes(req: RecipeGenerateSchema):
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API Key missing in backend .env")
+
+    # 1. Fetch user's current inventory and sort by earliest expiry date
+    raw_items = list(inventory_collection.find({"userEmail": req.userEmail}))
+    if not raw_items:
+        raise HTTPException(status_code=400, detail="Your kitchen inventory is empty. Add items first!")
+
+    now = datetime.now(timezone.utc)
+    available_items = []
+
+    for item in raw_items:
+        exp_str = item.get("expiryDate", "")
+        days_left = 999
+        try:
+            exp_dt = datetime.fromisoformat(exp_str.replace("Z", "+00:00"))
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            days_left = (exp_dt - now).days
+        except Exception:
+            pass
+
+        # Skip already expired items so Gemini doesn't suggest spoiled ingredients
+        if days_left < 0:
+            continue
+
+        available_items.append({
+            "name": item["name"],
+            "quantity": item["quantity"],
+            "daysLeft": days_left,
+            "isExpiring": days_left <= 4,
+        })
+
+    if not available_items:
+        raise HTTPException(
+            status_code=400,
+            detail="All items in your inventory are expired. Add fresh items to generate recipes."
+        )
+
+    # Sort so items expiring soonest appear first
+    available_items.sort(key=lambda x: x["daysLeft"])
+
+    inventory_lines = []
+    for it in available_items:
+        urgency = f" [EXPIRING SOON: {it['daysLeft']} days left - HIGH PRIORITY]" if it["isExpiring"] else f" ({it['daysLeft']} days left)"
+        inventory_lines.append(f"- {it['name']} ({it['quantity']}){urgency}")
+
+    inventory_text = "\n".join(inventory_lines)
+
+    user_doc = users_collection.find_one({"email": req.userEmail})
+    household_size = user_doc.get("householdSize", 2) if user_doc else 2
+
+    prompt = f"""
+You are a smart kitchen chef assistant for the FreshCast app.
+Here is the user's current kitchen inventory, sorted by urgency:
+{inventory_text}
+
+Target household size: {household_size} people.
+
+Generate 4 practical, delicious recipes that maximize the use of these available ingredients.
+CRITICAL RULES:
+1. Strongly prioritize recipes that use the [EXPIRING SOON] ingredients first.
+2. For each recipe, split ingredients into two lists:
+   - "inventoryIngredients": Ingredients taken from the user's inventory above, with the exact quantity needed for this recipe (do not exceed what they own). Set "isExpiring" to true if that ingredient was marked [EXPIRING SOON].
+   - "extraIngredients": Necessary spices, seasonings, oils, herbs, water, or basic pantry essentials NOT listed in the user's inventory, with exact quantities (e.g., "1 tsp", "2 tbsp").
+3. Return ONLY a valid JSON array of 4 recipe objects with these exact keys (no markdown fences):
+[
+  {{
+    "title": "Recipe Name",
+    "emoji": "🍲",
+    "description": "1 concise, appetizing sentence about the dish.",
+    "prepTime": "20 mins",
+    "servings": "{household_size} servings",
+    "expiringIngredientsUsed": ["Name of expiring item 1"],
+    "inventoryIngredients": [
+      {{ "name": "Item name", "quantity": "200 g", "isExpiring": true }}
+    ],
+    "extraIngredients": [
+      {{ "name": "Olive Oil", "quantity": "1 tbsp" }},
+      {{ "name": "Salt", "quantity": "to taste" }}
+    ],
+    "instructions": [
+      "Step 1 clear instruction.",
+      "Step 2 clear instruction."
+    ]
+  }}
+]
+"""
+
+    try:
+        model = genai.GenerativeModel("gemini-3.5-flash-lite")
+        response = model.generate_content(prompt)
+
+        text = response.text.strip()
+        text = re.sub(r"^```(?:json)?", "", text)
+        text = re.sub(r"```$", "", text).strip()
+
+        recipes = json.loads(text)
+        timestamp = int(now.timestamp())
+
+        for idx, recipe in enumerate(recipes):
+            recipe["id"] = f"recipe_{timestamp}_{idx}"
+
+        updated_at = now.isoformat()
+        recipes_collection.update_one(
+            {"userEmail": req.userEmail},
+            {"$set": {"recipes": recipes, "updatedAt": updated_at}},
+            upsert=True,
+        )
+
+        return {"recipes": recipes, "updatedAt": updated_at}
+
+    except Exception as e:
+        print(f"RECIPE GEMINI ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate recipes from AI")

@@ -1,17 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { ScrollView, Text, View, Keyboard } from 'react-native';
+import { ScrollView, Text, View, Keyboard, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExpiryItemCard } from '@/components/home/ExpiryItemCard';
 import { StatPill } from '@/components/home/StatPill';
 import { Fab } from '@/components/ui/Fab';
+import { GlassCard } from '@/components/ui/GlassCard';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useInventory } from '@/store/inventory';
-import { colors, gradients } from '@/theme/colors';
+import { colors } from '@/theme/colors';
 import { expiryStatus } from '@/utils/date';
 import { useAuth } from '@/context/AuthContext';
 
@@ -20,8 +20,8 @@ export default function HomeScreen() {
   const { products } = useInventory();
   const { user } = useAuth();
 
-  // Add state for search
   const [searchQuery, setSearchQuery] = useState('');
+  const [hasUnread, setHasUnread] = useState(false);
 
   const expiringSoon = products
     .filter((p) => ['urgent', 'soon'].includes(expiryStatus(p.expiryDate)))
@@ -31,9 +31,23 @@ export default function HomeScreen() {
     .sort((a, b) => (b.addedDate || '').localeCompare(a.addedDate || ''))
     .slice(0, 4);
 
-  // Filter products based on search query
+  const alertCount = expiringSoon.length + expiredCount;
+
+  useEffect(() => {
+    if (alertCount > 0) {
+      setHasUnread(true);
+    } else {
+      setHasUnread(false);
+    }
+  }, [alertCount]);
+
+  const handleOpenNotifications = () => {
+    setHasUnread(false);
+    router.push('/notifications');
+  };
+
   const searchResults = products.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const firstName = user?.name ? user.name.split(' ')[0] : 'Chef';
@@ -61,26 +75,54 @@ export default function HomeScreen() {
             </Text>
             <Text className="text-ink-300 text-[13px]">Here&apos;s what&apos;s fresh in your kitchen.</Text>
           </View>
-          <LinearGradient
-            colors={gradients.brand}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ height: 46, width: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text className="text-base font-bold" style={{ color: '#04120E' }}>
-              {firstName[0]}
-            </Text>
-          </LinearGradient>
+
+          {/* Notifications Button */}
+          <Pressable onPress={handleOpenNotifications}>
+            {({ pressed }) => (
+              <View style={{ opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }}>
+                <GlassCard
+                  radius={23}
+                  style={{
+                    height: 46,
+                    width: 46,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderColor: hasUnread ? 'rgba(43,255,156,0.4)' : colors.glass.borderStrong,
+                    borderWidth: 1,
+                  }}
+                >
+                  <Ionicons
+                    name={hasUnread ? 'notifications' : 'notifications-outline'}
+                    size={21}
+                    color={hasUnread ? colors.mint[300] : colors.text.primary}
+                  />
+                </GlassCard>
+
+                {hasUnread && alertCount > 0 && (
+                  <View
+                    style={{
+                      backgroundColor: expiredCount > 0 ? colors.status.expired : colors.status.soon,
+                      borderColor: '#04120E',
+                      borderWidth: 2,
+                    }}
+                    className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full items-center justify-center"
+                  >
+                    <Text className="text-[10px] font-extrabold" style={{ color: '#04120E' }}>
+                      {alertCount > 9 ? '9+' : alertCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </Pressable>
         </View>
 
-        {/* Wire up the SearchBar */}
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search items..."
         />
 
-        {/* Conditionally render Search Results or Dashboard */}
         {searchQuery.trim().length > 0 ? (
           <View className="gap-3">
             <Text className="text-ink-300 text-sm mb-2 font-medium">Search Results</Text>
@@ -96,7 +138,6 @@ export default function HomeScreen() {
             )}
           </View>
         ) : (
-          /* Default Dashboard View */
           <>
             <View className="flex-row gap-3">
               <StatPill label="Total Items" value={products.length} icon="cube" tint={colors.mint[300]} />

@@ -34,6 +34,8 @@ function RootLayoutNav() {
         <Stack.Screen name="edit-item" options={{ presentation: 'transparentModal' }} />
         <Stack.Screen name="category-details" options={{ presentation: 'modal' }} />
         <Stack.Screen name="category-modal" options={{ presentation: 'transparentModal' }} />
+        <Stack.Screen name="recipe-details" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="notifications" options={{ presentation: 'transparentModal' }} />
       </Stack>
     </InventoryProvider>
   );
